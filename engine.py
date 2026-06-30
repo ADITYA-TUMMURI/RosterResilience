@@ -104,17 +104,20 @@ def get_pressure_for_altitude(altitude_meters: float) -> float:
 def get_stadium_weather(latitude: float, longitude: float) -> dict:
     """
     Queries current/forecast weather metrics for a stadium from the NOAA API.
+    Specifically pulls temperature, wind speed, and relative humidity.
     """
     headers = {
         "User-Agent": "AtmosTrackSportsAnalytics/1.0 (adityafrom2007@gmail.com)"
     }
     
     try:
+        # Step 1: Resolve lat/long to grid point
         url = f"https://api.weather.gov/points/{latitude},{longitude}"
         response = requests.get(url, headers=headers, timeout=5)
         response.raise_for_status()
         point_data = response.json()
         
+        # Step 2: Fetch hourly forecast from the resolved grid url
         forecast_url = point_data["properties"]["forecastHourly"]
         forecast_response = requests.get(forecast_url, headers=headers, timeout=5)
         forecast_response.raise_for_status()
@@ -123,13 +126,22 @@ def get_stadium_weather(latitude: float, longitude: float) -> dict:
         current_period = forecast_data["properties"]["periods"][0]
         
         temp_f = current_period["temperature"]
+        
+        # Parse Wind Speed (e.g. "12 mph" or "5 to 10 mph")
         wind_str = current_period["windSpeed"]
         wind_digits = [int(s) for s in wind_str.split() if s.isdigit()]
         wind_mph = sum(wind_digits) / len(wind_digits) if wind_digits else 0.0
         
+        # Parse Relative Humidity from NOAA response properties
+        # NOAA response format: "relativeHumidity": {"unitCode": "wmoUnit:percent", "value": 68}
+        humidity = 50.0
+        if "relativeHumidity" in current_period and current_period["relativeHumidity"].get("value") is not None:
+            humidity = float(current_period["relativeHumidity"]["value"])
+        
         return {
             "temperature_f": float(temp_f),
             "wind_speed_mph": float(wind_mph),
+            "relative_humidity": humidity,
             "source": "NOAA Forecast API"
         }
         
@@ -138,12 +150,13 @@ def get_stadium_weather(latitude: float, longitude: float) -> dict:
         return {
             "temperature_f": 59.0,  # standard 15C
             "wind_speed_mph": 5.0,
+            "relative_humidity": 50.0,
             "source": "Fallback Defaults"
         }
 
 
 # =====================================================================
-# 3. CORE PHYSICS ENGINE
+# 3. CORE PHYSICS ENGINE (With Drag and Magnus Spin-Lift Force)
 # =====================================================================
 
 def calculate_air_density(pressure_pa: float, temp_f: float, relative_humidity: float = 50.0) -> float:
@@ -181,14 +194,39 @@ def calculate_drag_force(rho: float, velocity_mps: float, drag_coeff: float, are
     return fd
 
 
+def calculate_magnus_force(rho: float, velocity_mps: float, spin_rpm: float, area_m2: float, ball_radius_m: float) -> float:
+    """
+    Calculates the magnitude of the Magnus Force (Fm) in Newtons.
+    Formula: Fm = 0.5 * rho * v^2 * Cl * A
+    Where Cl (Lift Coefficient) is modeled as Cl = 0.4 * SpinParameter (capped at 0.4)
+    """
+    if velocity_mps <= 0:
+        return 0.0
+        
+    # Convert RPM to angular velocity (rad/s)
+    omega_rads = spin_rpm * (2 * math.pi / 60.0)
+    
+    # Dimensionless Spin Parameter: S = (r * omega) / v
+    spin_parameter = (ball_radius_m * omega_rads) / velocity_mps
+    
+    # Empirical lift coefficient calculation based on baseball aerodynamics (Nathan, 2008)
+    lift_coeff = min(0.4, 1.5 * spin_parameter)
+    
+    fm = 0.5 * rho * (velocity_mps ** 2) * lift_coeff * area_m2
+    return fm
+
+
 # =====================================================================
 # 4. HANDOFF FUNCTION
 # =====================================================================
 
-def calculate_trajectory(player_id: str, temp_f: float = None, wind_speed_mph: float = None, relative_humidity: float = 50.0, stadium_name: str = "Coors Field") -> pd.DataFrame:
+def calculate_trajectory(player_id: str, temp_f: float = None, wind_speed_mph: float = None, relative_humidity: float = None, stadium_name: str = "Coors Field", pitch_type: str = "fastball") -> pd.DataFrame:
     """
-    Calculates the 3D trajectory of a baseball under specific atmospheric conditions
-    and returns a pandas DataFrame matching the 'dummy_trajectory.csv' schema.
+    Calculates the 3D trajectory of a baseball incorporating air density, altitude,
+    headwind/tailwind, and Magnus spin-break effects.
+    
+    Returns:
+        pd.DataFrame matching the 'dummy_trajectory.csv' schema.
     """
     # 1. Physics & Ball properties (Defaults representing a baseball)
     DRAG_COEFF = 0.3              # Baseball drag coefficient
@@ -215,12 +253,14 @@ def calculate_trajectory(player_id: str, temp_f: float = None, wind_speed_mph: f
     altitude_m = stadium_info.get("altitude_meters", 0.0)
     
     # 3. Resolve atmospheric parameters (NOAA weather lookup if not overridden)
-    if temp_f is None or wind_speed_mph is None:
+    if temp_f is None or wind_speed_mph is None or relative_humidity is None:
         weather = get_stadium_weather(lat, lon)
         if temp_f is None:
             temp_f = weather["temperature_f"]
         if wind_speed_mph is None:
             wind_speed_mph = weather["wind_speed_mph"]
+        if relative_humidity is None:
+            relative_humidity = weather["relative_humidity"]
             
     pressure_pa = get_pressure_for_altitude(altitude_m)
     rho = calculate_air_density(pressure_pa, temp_f, relative_humidity)
@@ -243,20 +283,37 @@ def calculate_trajectory(player_id: str, temp_f: float = None, wind_speed_mph: f
     # 5. Initialize simulation parameters
     v0_mph = telemetry["release_speed_mph"]
     v0_mps = v0_mph * 0.44704
+    spin_rpm = telemetry["spin_rate_rpm"]
     
     # Convert feet release coordinates to meters
     x = telemetry["release_pos_x_ft"] * 0.3048
     y = 0.0 # start mound distance at 0
     z = telemetry["release_pos_z_ft"] * 0.3048
     
-    # Velocities
+    # Initial velocity vectors
     vx = 0.0
     vy = v0_mps
     vz = -0.5 # downward trajectory angle
     
-    # Wind speed
+    # Wind speed (headwind blowing in -y direction)
     wind_mps = wind_speed_mph * 0.44704
     
+    # Define spin axis vector based on pitch type
+    # For a pitch traveling primarily in the +y direction:
+    pitch_type = pitch_type.lower()
+    if pitch_type == "fastball":
+        # Backspin: spin axis points in +x direction. Force points upwards (+z)
+        spin_axis = [1.0, 0.0, 0.0]
+    elif pitch_type in ["curveball", "curve"]:
+        # Topspin: spin axis points in -x direction. Force points downwards (-z)
+        spin_axis = [-1.0, 0.0, 0.0]
+    elif pitch_type in ["slider", "sweeper"]:
+        # Sidespin: spin axis points in -z direction. Force points right (+x)
+        spin_axis = [0.0, 0.0, -1.0]
+    else:
+        # Generic neutral spin
+        spin_axis = [0.0, 0.0, 0.0]
+        
     # Integration steps
     dt = 0.1
     steps = 5
@@ -272,11 +329,15 @@ def calculate_trajectory(player_id: str, temp_f: float = None, wind_speed_mph: f
         t = i * dt
         
         # Calculate velocity relative to wind (assuming headwind blowing against y axis)
-        v_relative = math.sqrt(vx**2 + (vy + wind_mps)**2 + vz**2)
+        v_relative_y = vy + wind_mps
+        v_relative = math.sqrt(vx**2 + v_relative_y**2 + vz**2)
         v_scalar_mph = math.sqrt(vx**2 + vy**2 + vz**2) / 0.44704
         
+        # Force calculations
         fd = calculate_drag_force(rho, v_relative, DRAG_COEFF, BALL_AREA_M2)
+        fm_magnitude = calculate_magnus_force(rho, v_relative, spin_rpm, BALL_AREA_M2, BALL_RADIUS_M)
         
+        # Record state
         time_sec_list.append(round(t, 2))
         x_coord_list.append(round(x * 3.28084, 2))
         y_coord_list.append(round(y * 3.28084, 2))
@@ -284,12 +345,32 @@ def calculate_trajectory(player_id: str, temp_f: float = None, wind_speed_mph: f
         velocity_mph_list.append(round(v_scalar_mph, 2))
         drag_force_list.append(round(fd, 4))
         
-        # Acceleration
-        ax = -(fd * (vx / v_relative)) / BALL_MASS_KG
-        ay = -(fd * ((vy + wind_mps) / v_relative)) / BALL_MASS_KG
-        az = -GRAVITY - (fd * (vz / v_relative)) / BALL_MASS_KG
+        # 1. Acceleration due to Drag (opposite to velocity vector relative to air)
+        ax_drag = -(fd * (vx / v_relative)) / BALL_MASS_KG
+        ay_drag = -(fd * (v_relative_y / v_relative)) / BALL_MASS_KG
+        az_drag = -(fd * (vz / v_relative)) / BALL_MASS_KG
         
-        # Euler step
+        # 2. Acceleration due to Magnus Effect (cross product of spin axis and velocity direction)
+        # Force direction = spin_axis x velocity_direction
+        v_dir_x = vx / v_relative
+        v_dir_y = v_relative_y / v_relative
+        v_dir_z = vz / v_relative
+        
+        # Cross product components: spin_axis x v_dir
+        fm_dir_x = spin_axis[1] * v_dir_z - spin_axis[2] * v_dir_y
+        fm_dir_y = spin_axis[2] * v_dir_x - spin_axis[0] * v_dir_z
+        fm_dir_z = spin_axis[0] * v_dir_y - spin_axis[1] * v_dir_x
+        
+        ax_magnus = (fm_magnitude * fm_dir_x) / BALL_MASS_KG
+        ay_magnus = (fm_magnitude * fm_dir_y) / BALL_MASS_KG
+        az_magnus = (fm_magnitude * fm_dir_z) / BALL_MASS_KG
+        
+        # Total Acceleration (Drag + Magnus + Gravity)
+        ax = ax_drag + ax_magnus
+        ay = ay_drag + ay_magnus
+        az = az_drag + az_magnus - GRAVITY
+        
+        # Euler integration step
         x += vx * dt
         y += vy * dt
         z += vz * dt
@@ -311,25 +392,17 @@ def calculate_trajectory(player_id: str, temp_f: float = None, wind_speed_mph: f
 
 
 if __name__ == "__main__":
-    print("Testing Updated AtmosTrack Physics Engine...")
+    print("Testing Fully Featured AtmosTrack Physics Engine (Drag + Magnus Effect)...")
     
-    # 1. Test Altitude Adjustment
-    denver_pressure = get_pressure_for_altitude(1585.0)
-    buffalo_pressure = get_pressure_for_altitude(183.0)
-    print(f"Denver (Coors Field) Standard Pressure: {denver_pressure:.1f} Pa")
-    print(f"Buffalo (Highmark Stadium) Standard Pressure: {buffalo_pressure:.1f} Pa")
+    # Test NOAA weather lookup relative humidity inclusion
+    stadium_weather = get_stadium_weather(39.756, -104.994)
+    print(f"Live Coors Field NOAA Weather: {stadium_weather}")
     
-    # 2. Test Density with Humidity
-    rho_dry = calculate_air_density(101325.0, 59.0, relative_humidity=0.0)
-    rho_humid = calculate_air_density(101325.0, 59.0, relative_humidity=100.0)
-    print(f"Dry Air Density at 59F: {rho_dry:.4f} kg/m^3")
-    print(f"Humid Air Density (100% RH) at 59F: {rho_humid:.4f} kg/m^3")
+    # Compare Magnus breaking effects for a Fastball vs a Slider
+    print("\nSimulating Fastball (Backspin) at Coors Field (Warm/Dry):")
+    df_fb = calculate_trajectory(player_id="tarik skubal", temp_f=80.0, wind_speed_mph=0.0, relative_humidity=20.0, stadium_name="Coors Field", pitch_type="fastball")
+    print(df_fb.to_string(index=False))
     
-    # 3. Run comparative trajectories using a real player (or fallback)
-    print("\nSimulating pitch for 'Tarik Skubal' at Coors Field (Warm/Dry):")
-    df_denver = calculate_trajectory(player_id="tarik skubal", temp_f=80.0, wind_speed_mph=0.0, relative_humidity=20.0, stadium_name="Coors Field")
-    print(df_denver.to_string(index=False))
-    
-    print("\nSimulating pitch for 'Tarik Skubal' at Highmark Stadium (Cold/Wet):")
-    df_buffalo = calculate_trajectory(player_id="tarik skubal", temp_f=30.0, wind_speed_mph=10.0, relative_humidity=90.0, stadium_name="Highmark Stadium")
-    print(df_buffalo.to_string(index=False))
+    print("\nSimulating Slider (Sidespin) at Coors Field (Warm/Dry):")
+    df_sld = calculate_trajectory(player_id="tarik skubal", temp_f=80.0, wind_speed_mph=0.0, relative_humidity=20.0, stadium_name="Coors Field", pitch_type="slider")
+    print(df_sld.to_string(index=False))
