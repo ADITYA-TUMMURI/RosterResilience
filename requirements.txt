@@ -1,0 +1,7 @@
+pandas
+numpy
+requests
+pybaseball
+nfl-data-py
+streamlit
+plotly

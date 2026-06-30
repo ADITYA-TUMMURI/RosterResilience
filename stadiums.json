@@ -1,0 +1,20 @@
+{
+  "Highmark Stadium": {
+    "team": "Buffalo Bills",
+    "zip": "14127",
+    "latitude": 42.774,
+    "longitude": -78.787
+  },
+  "Coors Field": {
+    "team": "Denver Broncos/Rockies",
+    "zip": "80205",
+    "latitude": 39.756,
+    "longitude": -104.994
+  },
+  "Lambeau Field": {
+    "team": "Green Bay Packers",
+    "zip": "54304",
+    "latitude": 44.501,
+    "longitude": -88.062
+  }
+}
