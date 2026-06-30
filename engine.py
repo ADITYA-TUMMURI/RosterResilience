@@ -169,13 +169,15 @@ def calculate_air_density(pressure_pa: float, temp_f: float, relative_humidity: 
     
     # Convert Fahrenheit to Kelvin
     temp_k = (temp_f - 32) * (5.0 / 9.0) + 273.15
+    if temp_k < 1.0:
+        temp_k = 1.0  # Prevent division by zero or negative absolute temperature
     temp_c = temp_k - 273.15
     
     # Saturation vapor pressure (Tetens equation in Pascals)
     p_sat = 610.78 * math.exp((17.27 * temp_c) / (temp_c + 237.3))
     
-    # Partial pressure of water vapor
-    p_vapor = (relative_humidity / 100.0) * p_sat
+    # Partial pressure of water vapor (cannot exceed total atmospheric pressure)
+    p_vapor = min(pressure_pa, (relative_humidity / 100.0) * p_sat)
     
     # Partial pressure of dry air
     p_dry = pressure_pa - p_vapor
@@ -200,7 +202,7 @@ def calculate_magnus_force(rho: float, velocity_mps: float, spin_rpm: float, are
     Formula: Fm = 0.5 * rho * v^2 * Cl * A
     Where Cl (Lift Coefficient) is modeled as Cl = 0.4 * SpinParameter (capped at 0.4)
     """
-    if velocity_mps <= 0:
+    if velocity_mps <= 0.01:
         return 0.0
         
     # Convert RPM to angular velocity (rad/s)

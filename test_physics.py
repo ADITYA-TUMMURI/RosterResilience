@@ -48,5 +48,18 @@ class TestRosterResiliencePhysics(unittest.TestCase):
         sld_x_final = df_sld.iloc[-1]["x_coord"]
         self.assertTrue(sld_x_final > fb_x_final)
 
+    def test_edge_cases(self):
+        # 1. Absolute zero temperature in Fahrenheit
+        density_zero_k = calculate_air_density(101325.0, -459.67, relative_humidity=50.0)
+        self.assertTrue(density_zero_k > 0.0)
+        
+        # 2. Zero velocity Magnus force check
+        fm_zero_v = calculate_magnus_force(rho=1.2, velocity_mps=0.0, spin_rpm=2400.0, area_m2=0.0042, ball_radius_m=0.0366)
+        self.assertEqual(fm_zero_v, 0.0)
+        
+        # 3. Trajectory with absolute zero temperature simulation
+        df = calculate_trajectory(player_id=None, temp_f=-459.67, wind_speed_mph=0.0, relative_humidity=0.0, stadium_name="Coors Field")
+        self.assertEqual(len(df), 5)
+
 if __name__ == "__main__":
     unittest.main()
