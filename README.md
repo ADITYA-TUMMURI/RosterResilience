@@ -1,10 +1,10 @@
-# 🏆 RosterResilience (AtmosTrack)
+# 🏆 AtmosTrack: Micro-Climate Physics Degradation Engine
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 [![Streamlit App](https://static.streamlit.io/badge-gradient-gradient.svg)](https://streamlit.io/)
 
-**AtmosTrack** is a micro-climate physics degradation engine designed to prove how outdoor venue logistics and localized stadium micro-climates alter the physical trajectory of a ball (football/baseball) and degrade player performance under specific atmospheric conditions. 
+**AtmosTrack** is an advanced micro-climate physics engine designed for front-office sports analytics. It mathematically proves and visualizes how outdoor stadium logistics, altitude, temperature, relative humidity, and wind shear alter the physical trajectory of a ball (football/baseball), degrading player metrics under specific atmospheric conditions.
 
 Standard sports analytics treat every game environment equally, but **AtmosTrack** shatters this cognitive bias: *Weather data is actionable sports data.*
 
@@ -19,19 +19,53 @@ AtmosTrack calculates and visualizes this exact micro-climate performance degrad
 
 ---
 
+## ⚙️ Core Technical Features
+
+1. **Two-Step Live NOAA Weather Integration**: Queries real-time conditions by first resolving stadium coordinates to grid endpoints, then fetching live temperature, wind speed, and relative humidity values.
+2. **Altitude-Based Pressure Scaling**: Uses the barometric equation to dynamically scale base air pressure based on stadium elevation (e.g., Coors Field's lower baseline density vs. Highmark Stadium).
+3. **Advanced Flight Aerodynamics (Drag & Magnus Lift)**: Models both the deceleration drag force and the lateral/vertical Magnus breaking force ($\vec{F}_m$) based on spin rate ($RPM$) and pitch type (Fastball backspin rise, Slider sidespin break, Curveball topspin drop).
+4. **Live MLB Statcast Telemetry**: Dynamically queries historical pitcher release velocity, spin rate, and 3D coordinate releases (using `pybaseball` Statcast data).
+5. **Robust Handoff Data Contract**: Outputs structured dataframes matching the contract layout (`dummy_trajectory.csv`) for seamless integration with frontend 3D dashboards.
+
+---
+
+## 🧮 Theoretical Framework & Physics Equations
+
+The AtmosTrack physics engine runs on the following aerodynamic framework:
+
+### 1. Barometric Pressure Altitude Correction
+Standard pressure ($P$) is calculated based on stadium elevation ($h$ in meters) using the barometric formula:
+$$P = P_0 \left(1 - \frac{L \cdot h}{T_0}\right)^{\frac{g \cdot M}{R^* \cdot L}} \approx 101325 \left(1 - 2.25577 \times 10^{-5} \cdot h\right)^{5.25588}$$
+
+### 2. Humid Air Density ($\rho$)
+Calculates the combined density of dry air and water vapor:
+$$\rho = \frac{p_{\text{dry}}}{R_{\text{dry}} \cdot T} + \frac{p_{\text{vapor}}}{R_{\text{vapor}} \cdot T}$$
+Where saturation vapor pressure ($p_{\text{sat}}$) is calculated via the Tetens formula:
+$$p_{\text{sat}} = 610.78 \cdot e^{\frac{17.27 \cdot T_c}{T_c + 237.3}}, \quad p_{\text{vapor}} = RH_{\text{fraction}} \cdot p_{\text{sat}}, \quad p_{\text{dry}} = P - p_{\text{vapor}}$$
+
+### 3. Aerodynamic Drag Force ($F_d$)
+$$F_d = \frac{1}{2} \rho v^2 C_d A$$
+
+### 4. Magnus Lift & Break Force ($\vec{F}_m$)
+$$\vec{F}_m = \frac{1}{2} \rho v^2 C_L A \cdot (\hat{\omega} \times \hat{v})$$
+* $\hat{\omega}$ = unit vector of the spin axis.
+* $C_L$ = lift coefficient, proportional to the dimensionless spin parameter ($S = \frac{r \cdot \omega}{v}$) and capped at $0.4$.
+
+---
+
 ## 🛠️ Dataset Requisition Pipeline
 
-The engine seamlessly merges clean sports telemetry with high-fidelity atmospheric data:
+The AtmosTrack architecture merges sports telemetry with atmospheric data:
 
 | Data Type | Source / Library | Purpose |
 | :--- | :--- | :--- |
-| **Sports Telemetry** | `nfl-data-py` & `pybaseball` | Scrapes exact NFL passing trajectories or MLB Statcast pitch tracking and spin rates. |
-| **Atmospheric Data** | NOAA Weather API | Pulls historical temperature, wind speed, and air density matched to the exact stadium timestamp and zip code. |
+| **Sports Telemetry** | `pybaseball` / `nfl-data-py` | Scrapes exact NFL passing trajectories or MLB Statcast pitch tracking and spin rates. |
+| **Atmospheric Data** | NOAA Weather API | Pulls temperature, wind speed, and relative humidity matched to coordinates and ZIP code. |
 
 ```
                  +-------------------+      +-------------------+
-                 |  nfl-data-py /    |      |    NOAA Weather   |
-                 |   pybaseball      |      |        API        |
+                 |    pybaseball /   |      |    NOAA Weather   |
+                 |   nfl-data-py     |      |        API        |
                  +---------+---------+      +---------+---------+
                            |                          |
                            v                          v
@@ -48,51 +82,17 @@ The engine seamlessly merges clean sports telemetry with high-fidelity atmospher
 
 ---
 
-## 🧮 The Physics Engine (Backend)
+## 📁 Repository Structure
 
-AtmosTrack does not rely on basic historical averages; it utilizes applied physics. The backend calculates an **Aerodynamic Drag Modifier** based on real-time air density ($\rho$). As temperature ($T$) drops and pressure ($P$) shifts, the drag force ($F_d$) on the ball increases, artificially degrading the athlete's metrics.
-
-The core engine runs on the following aerodynamic framework:
-
-### 1. Air Density Calculation ($\rho$)
-$$\rho = \frac{P}{R_{\text{specific}} \cdot T}$$
-
-Where:
-* $P$ = Barometric Pressure (Pa)
-* $R_{\text{specific}}$ = Specific gas constant for dry air ($287.058 \text{ J/(kg·K)}$)
-* $T$ = Absolute Temperature (Kelvin)
-
-### 2. Aerodynamic Drag Force ($F_d$)
-$$F_d = \frac{1}{2} \rho v^2 C_d A$$
-
-Where:
-* $\rho$ = Calculated air density ($\text{kg/m}^3$)
-* $v$ = Velocity of the ball relative to the air ($\text{m/s}$)
-* $C_d$ = Drag coefficient of the ball (varies with seam structure & spin rate)
-* $A$ = Cross-sectional area of the ball ($\text{m}^2$)
+* **`engine.py`**: The core backend file containing data fetching functions (`fetch_player_telemetry`, `get_stadium_weather`) and simulation functions (`calculate_trajectory`).
+* **`stadiums.json`**: Configuration file mapping test venues with coordinates, ZIPs, and elevation altitudes.
+* **`dummy_trajectory.csv`**: Target contract output format mapping columns: `time_sec`, `x_coord`, `y_coord`, `z_coord`, `velocity_mph`, and `drag_force`.
+* **`test_physics.py`**: Automated unit tests checking density, altitude pressure, and Magnus lift forces.
+* **`requirements.txt`**: Python dependencies list.
 
 ---
 
-## 📊 Interactive Frontend Experience
-
-The user interface transforms complex physics into immediate front-office insights:
-
-* **3D Visualizations:** The Streamlit dashboard features interactive 3D Plotly scatter plots that map the exact trajectory of a football or baseball.
-* **Dynamic Scenario Testing:** A General Manager can use UI sliders to dynamically drop the ambient temperature from **80°F** to **20°F** or increase wind speed.
-* **Actionable Output:** As variables change, the 3D trajectory visually compresses on the screen in real-time. This mathematically proves whether a multi-million dollar free-agent target's arm strength can physically cut through high-density, freezing air in a cold-weather stadium.
-
----
-
-## 🚀 Actionable Business Impact
-
-AtmosTrack prevents multi-million dollar front-office mistakes. By visualizing the intersection of atmospheric science and sports finance, franchises can:
-1. **Mitigate Free Agency Risk:** Avoid signing expensive players whose physical mechanics (e.g., lower spin rates or lower release velocity) are incompatible with their home stadium's micro-climate.
-2. **Optimize Game-Plan Tactics:** Tailor passing/pitching strategies based on the projected weather density on game day.
-3. **Draft Profiling:** Build target athletic profiles customized to the team's home venue micro-climate (e.g., favoring high-spin pitch profiles in low-temperature/high-density environments).
-
----
-
-## 🛠️ Installation & Setup
+## 🚀 Installation & Setup
 
 1. **Clone the Repository:**
    ```bash
@@ -100,18 +100,17 @@ AtmosTrack prevents multi-million dollar front-office mistakes. By visualizing t
    cd RosterResilience
    ```
 
-2. **Set Up Virtual Environment:**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-
-3. **Install Dependencies:**
+2. **Install Dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Run the Dashboard:**
+3. **Verify the Physics Calculations (Unit Tests):**
    ```bash
-   streamlit run app.py
+   python test_physics.py
+   ```
+
+4. **Run Simulation Verification:**
+   ```bash
+   python engine.py
    ```
