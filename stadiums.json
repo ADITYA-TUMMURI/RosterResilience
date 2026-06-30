@@ -3,18 +3,21 @@
     "team": "Buffalo Bills",
     "zip": "14127",
     "latitude": 42.774,
-    "longitude": -78.787
+    "longitude": -78.787,
+    "altitude_meters": 183.0
   },
   "Coors Field": {
     "team": "Denver Broncos/Rockies",
     "zip": "80205",
     "latitude": 39.756,
-    "longitude": -104.994
+    "longitude": -104.994,
+    "altitude_meters": 1585.0
   },
   "Lambeau Field": {
     "team": "Green Bay Packers",
     "zip": "54304",
     "latitude": 44.501,
-    "longitude": -88.062
+    "longitude": -88.062,
+    "altitude_meters": 195.0
   }
 }
