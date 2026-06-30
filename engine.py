@@ -1,5 +1,5 @@
 """
-AtmosTrack: Micro-Climate Physics Degradation Engine
+RosterResilience: Micro-Climate Physics Degradation Engine
 AQX Sports Analytics Data Bowl #2
 Backend Physics & Data Requisition Engine (engine.py)
 """
@@ -107,7 +107,7 @@ def get_stadium_weather(latitude: float, longitude: float) -> dict:
     Specifically pulls temperature, wind speed, and relative humidity.
     """
     headers = {
-        "User-Agent": "AtmosTrackSportsAnalytics/1.0 (adityafrom2007@gmail.com)"
+        "User-Agent": "RosterResilienceSportsAnalytics/1.0 (adityafrom2007@gmail.com)"
     }
     
     try:
@@ -392,7 +392,7 @@ def calculate_trajectory(player_id: str, temp_f: float = None, wind_speed_mph: f
 
 
 if __name__ == "__main__":
-    print("Testing Fully Featured AtmosTrack Physics Engine (Drag + Magnus Effect)...")
+    print("Testing Fully Featured RosterResilience Physics Engine (Drag + Magnus Effect)...")
     
     # Test NOAA weather lookup relative humidity inclusion
     stadium_weather = get_stadium_weather(39.756, -104.994)

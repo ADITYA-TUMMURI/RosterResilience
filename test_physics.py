@@ -1,7 +1,7 @@
 import unittest
 from engine import get_pressure_for_altitude, calculate_air_density, calculate_drag_force, calculate_magnus_force, calculate_trajectory
 
-class TestAtmosTrackPhysics(unittest.TestCase):
+class TestRosterResiliencePhysics(unittest.TestCase):
     def test_altitude_pressure(self):
         # Sea level pressure should be 101325.0 Pa
         self.assertAlmostEqual(get_pressure_for_altitude(0.0), 101325.0, places=1)

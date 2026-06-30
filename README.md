@@ -1,12 +1,12 @@
-# 🏆 AtmosTrack: Micro-Climate Physics Degradation Engine
+# 🏆 RosterResilience: Micro-Climate Physics Degradation Engine
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 [![Streamlit App](https://static.streamlit.io/badge-gradient-gradient.svg)](https://streamlit.io/)
 
-**AtmosTrack** is an advanced micro-climate physics engine designed for front-office sports analytics. It mathematically proves and visualizes how outdoor stadium logistics, altitude, temperature, relative humidity, and wind shear alter the physical trajectory of a ball (football/baseball), degrading player metrics under specific atmospheric conditions.
+**RosterResilience** is an advanced micro-climate physics engine designed for front-office sports analytics. It mathematically proves and visualizes how outdoor stadium logistics, altitude, temperature, relative humidity, and wind shear alter the physical trajectory of a ball (football/baseball), degrading player metrics under specific atmospheric conditions.
 
-Standard sports analytics treat every game environment equally, but **AtmosTrack** shatters this cognitive bias: *Weather data is actionable sports data.*
+Standard sports analytics treat every game environment equally, but **RosterResilience** shatters this cognitive bias: *Weather data is actionable sports data.*
 
 ---
 
@@ -14,7 +14,7 @@ Standard sports analytics treat every game environment equally, but **AtmosTrack
 
 When a front office evaluates a free-agent quarterback or pitcher, they assume the athlete's statistical production will perfectly translate to their new home stadium. However, shifts in temperature, wind shear, and barometric pressure drastically alter aerodynamic drag.
 
-AtmosTrack calculates and visualizes this exact micro-climate performance degradation, answering a critical front-office question: 
+RosterResilience calculates and visualizes this exact micro-climate performance degradation, answering a critical front-office question: 
 > **Does this athlete have the physical mechanics to succeed in our specific stadium's atmosphere?**
 
 ---
@@ -31,7 +31,7 @@ AtmosTrack calculates and visualizes this exact micro-climate performance degrad
 
 ## 🧮 Theoretical Framework & Physics Equations
 
-The AtmosTrack physics engine runs on the following aerodynamic framework:
+The RosterResilience physics engine runs on the following aerodynamic framework:
 
 ### 1. Barometric Pressure Altitude Correction
 Standard pressure ($P$) is calculated based on stadium elevation ($h$ in meters) using the barometric formula:
@@ -55,7 +55,7 @@ $$\vec{F}_m = \frac{1}{2} \rho v^2 C_L A \cdot (\hat{\omega} \times \hat{v})$$
 
 ## 🛠️ Dataset Requisition Pipeline
 
-The AtmosTrack architecture merges sports telemetry with atmospheric data:
+The RosterResilience architecture merges sports telemetry with atmospheric data:
 
 | Data Type | Source / Library | Purpose |
 | :--- | :--- | :--- |
@@ -74,7 +74,7 @@ The AtmosTrack architecture merges sports telemetry with atmospheric data:
                            +------------+-------------+
                                         |
                                         v
-                            [ AtmosTrack Physics Engine ]
+                            [ RosterResilience Physics Engine ]
                                         |
                                         v
                             [ 3D Streamlit Dashboard ]
